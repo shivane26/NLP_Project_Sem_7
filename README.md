@@ -2,7 +2,6 @@
 
 WordSense.io is a web-based word-guessing game that challenges you to find a secret word. Unlike traditional guessing games, it uses a machine learning model to measure the **semantic similarity** between your guess and the target word, providing "Hot," "Warm," or "Cold" feedback based on how close you are in meaning.
 
-![WordSense.io Gameplay Screenshot](https://i.imgur.com/example.png) 
 ## ✨ Features
 
 * **Semantic Similarity:** Uses a real NLP model to understand the *meaning* of your guess, not just the letters.
