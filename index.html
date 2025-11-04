@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Semantic Guess — Upgraded</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- TensorFlow.js & Universal Sentence Encoder -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/universal-sentence-encoder@1.3.3/dist/universal-sentence-encoder.min.js"></script>
+    <!-- Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+    <!-- Inter font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .btn { @apply px-5 py-2 rounded-lg text-white font-medium shadow transition-all duration-200 ease-in-out; }
+        .btn-blue { @apply bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300; }
+        .btn-green { @apply bg-green-600 hover:bg-green-700 disabled:bg-green-300; }
+        .temp-hot { @apply text-red-600; }
+        .temp-warm { @apply text-orange-500; }
+        .temp-cool { @apply text-cyan-500; }
+        .temp-cold { @apply text-blue-500; }
+        .temp-freezing { @apply text-gray-500; }
+        .hint { @apply text-sm text-gray-600 italic; }
+        #loader { border: 5px solid #f3f3f3; border-top: 5px solid #3498db; border-radius: 50%; width: 44px; height: 44px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        /* similarity bar transition */
+        #similarity-bar { transition: width 600ms ease, background 600ms ease; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-sky-50 to-amber-50 min-h-screen flex items-center justify-center p-6">
+
+  <!-- Main Card -->
+  <div id="card" class="bg-white p-8 rounded-3xl shadow-2xl max-w-xl w-full relative">
+
+    <!-- Start Screen (hidden after start)
+    <div id="start-screen" class="absolute inset-0 bg-white/95 backdrop-blur-sm z-20 flex flex-col items-center justify-center rounded-3xl">
+      <h1 class="text-4xl font-bold text-gray-800 mb-2">WordSense.io 🧠</h1>
+      <p class="text-gray-600 mb-6 text-center">Your task is to guess the secret word.</p>
+      
+      <div class="w-full px-12">
+        <label class="block text-sm text-gray-600 mb-1">Difficulty</label>
+        <select id="start-difficulty" class="w-full border p-2 rounded-md">
+          <option value="medium" selected>Medium</option>
+          <option value="easy">Easy</option>
+          <option value="hard">Hard</option>
+        </select>
+      </div>
+      <p class="text-xs text-gray-400 mt-4">Model loads once — subsequent plays are instant. Works fully client-side.</p>
+      <div class="flex gap-3 mb-4">
+        <button id="start-play" class="btn btn-blue text-lg px-6">Play</button>
+      </div>
+    </div> -->
+
+    <!-- <div id="start-screen" class="absolute inset-0 bg-white/95 backdrop-blur-sm z-20 flex flex-col items-center justify-center rounded-3xl">
+      <h1 class="text-4xl font-bold text-gray-800 mb-2">WordSense.io 🧠</h1>
+      <p class="text-gray-600 mb-6 text-center">Your task is to guess the secret word.</p>
+      
+      <div class="w-full px-12">
+        <label class="block text-sm text-gray-600 mb-1">Difficulty</label>
+        <select id="start-difficulty" class="w-full border p-2 rounded-md">
+          <option value="medium" selected>Medium</option>
+          <option value="easy">Easy</option>
+          <option value="hard">Hard</option>
+        </select>
+      </div>
+      <div class="flex gap-3 mb-4">
+        <button id="start-play" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-lg shadow-md text-lg transition duration-150 ease-in-out">Play</button>
+      </div>
+    </div> -->
+
+    <div id="start-screen" class="absolute inset-0 bg-white/95 backdrop-blur-sm z-20 flex flex-col items-center justify-center rounded-3xl">
+      
+      <h1 class="text-3xl sm:text-4xl font-bold text-gray-800 mb-2">WordSense.io 🧠</h1>
+      
+      <p class="text-gray-600 mb-6 text-center px-4">Your task is to guess the secret word.</p>
+      
+      <div class="w-full px-8 sm:px-12">
+        <label class="block text-sm text-gray-600 mb-1">Difficulty</label>
+        <select id="start-difficulty" class="w-full border p-2 rounded-md">
+          <option value="medium" selected>Medium</option>
+          <option value="easy">Easy</option>
+          <option value="hard">Hard</option>
+        </select>
+      </div>
+      
+      
+      <div class="flex gap-3 mb-4 mt-8">
+        <button id="start-play" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-lg shadow-md text-base sm:text-lg transition duration-150 ease-in-out">Play</button>
+      </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="absolute inset-0 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center rounded-3xl z-10">
+      <div id="loader"></div>
+      <p id="loading-text" class="mt-4 text-lg font-medium text-gray-700">Loading NLP model...</p>
+    </div>
+
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="text-2xl font-bold text-gray-800">Semantic Guess</h2>
+      <div class="text-right">
+        <p class="text-sm text-gray-500">Best: <span id="best-score">-</span></p>
+        <p class="text-sm text-gray-500">Streak: <span id="streak">0</span></p>
+      </div>
+    </div>
+
+    <p class="text-gray-500 mb-4">Guess the secret word. The similarity meter shows how "close" you are.</p>
+
+    <!-- Controls -->
+    <div class="flex gap-3 mb-4 items-center">
+      <input id="guess-input" type="text" placeholder="Enter your guess..." class="flex-grow p-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500" autocomplete="off" />
+      <button id="guess-button" class="btn btn-blue">Guess</button>
+      <button id="new-game-button" class="btn btn-green">New</button>
+    </div>
+
+    <div class="flex gap-4 mb-3 items-center">
+      <div class="flex-1">
+        <p class="text-sm text-gray-600">Guesses: <span id="guess-count" class="font-bold text-blue-600">0</span></p>
+      </div>
+      <div class="w-36 text-right">
+        <p class="text-sm text-gray-600">Time: <span id="timer">0s</span></p>
+      </div>
+    </div>
+
+    <!-- Similarity Meter -->
+    <div class="mb-4">
+      <p class="text-sm text-gray-600 mb-2 text-center">Similarity Meter</p>
+      <div class="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
+        <div id="similarity-bar" class="h-4 bg-gradient-to-r from-emerald-400 to-rose-500" style="width:0%"></div>
+      </div>
+    </div>
+
+    <!-- Guess History -->
+    <div id="guess-history-container" class="bg-gray-50 border-2 border-gray-200 rounded-lg p-4 min-h-[160px] max-h-[240px] overflow-y-auto mb-4">
+      <ul id="guess-list" class="space-y-2"></ul>
+    </div>
+
+    <!-- Win Message -->
+    <div id="win-message" class="hidden text-center p-4 bg-green-50 border-2 border-green-200 text-green-700 font-bold text-lg rounded-lg">
+      You got it!
+    </div>
+
+    <!-- Footer hints and options -->
+    <div class="mt-4 flex items-center justify-between">
+      <p class="text-sm text-gray-500">Mode: <span id="mode-label">Human</span></p>
+      <div class="flex items-center gap-3">
+        <select id="difficulty" class="border p-2 rounded-md text-sm">
+          <option value="easy">Easy</option>
+          <option value="medium" selected>Medium</option>
+          <option value="hard">Hard</option>
+        </select>
+        <button id="reset-stats" class="text-xs text-gray-500 underline">Reset Stats</button>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // ------------------ CONFIG ------------------
+    // const secretWords = [
+    //   "king","apple","travel","music","ocean","winter","fire",
+    //   "dog","cat","house","car","book","computer","moon","sun",
+    //   "river","mountain","love","sadness","job","money","doctor"
+    // ];
+
+    // const secretWordHints = {
+    //   "king": ["Wears a crown","Rules a monarchy","Lives in a castle"],
+    //   "apple": ["A common fruit","Keeps the doctor away","Grows on trees"],
+    //   "travel": ["Going on a journey","You might need a passport","Visiting new places"],
+    //   "music": ["Made of sounds and rhythm","You can dance to it","Listen with your ears"],
+    //   "ocean": ["A very large body of water","It's salty","Surfers love this"],
+    //   "winter": ["The coldest season","Time for snowmen","Comes before spring"],
+    //   "fire": ["It's very hot","Produces light and smoke","Don't touch it!"],
+    //   "dog": ["Man's best friend","It barks","Chases cats"],
+    //   "cat": ["It meows","Likes to sleep","Chases mice"],
+    //   "house": ["Where you live","Has rooms and a roof","A home"],
+    //   "car": ["Used for driving","Has four wheels","Goes on the road"],
+    //   "book": ["You read this","Made of paper and words","Found in a library"],
+    //   "computer": ["An electronic device","Has a keyboard and screen","You might be using one now!"],
+    //   "moon": ["Orbits the Earth","Shines at night","Apollo 11 visited it"],
+    //   "sun": ["A giant star","Gives us light and warmth","Very bright"],
+    //   "river": ["A long stream of water","Flows to the sea","Boats sail on it"],
+    //   "mountain": ["A very large hill","Difficult to climb","Has a peak"],
+    //   "love": ["A strong feeling of affection","Opposite of hate","Symbolized by a heart"],
+    //   "sadness": ["Feeling of being unhappy","You might cry","Opposite of joy"],
+    //   "job": ["What you do for work","Earns you an income","A profession"],
+    //   "money": ["Used to buy things","Coins and bills","Keeps the world turning"],
+    //   "doctor": ["Works at a hospital","Helps sick people","Wears a white coat"]
+    // };
+
+    // // A tiny synonyms dictionary to make the game forgiving
+    // const synonyms = {
+    //   king: ["monarch","ruler","sovereign"],
+    //   car: ["automobile","vehicle","ride"],
+    //   book: ["novel","tome","volume"],
+    //   computer: ["pc","machine","laptop"],
+    //   doctor: ["physician","medic"],
+    //   money: ["cash","currency","bucks"],
+    //   house: ["home","residence"],
+    //   dog: ["puppy","canine"],
+    //   cat: ["feline"],
+    //   ocean: ["sea","big sea"],
+    //   travel: ["trip","journey"],
+    //   music: ["song","tune"]
+    // };
+
+    const secretWords = [
+      "king","apple","travel","music","ocean","winter","fire",
+      "dog","cat","house","car","book","computer","moon","sun",
+      "river","mountain","love","sadness","job","money","doctor",
+      "school", "friend", "water", "tree", "bridge", "phone", "time",
+      "train", "sleep", "rain", "coffee", "chair", "movie", "game", "beach"
+    ];
+
+    const secretWordHints = {
+      // Original Words (Revised)
+      "king": ["Wears a crown", "Top of a monarchy", "A male ruler", "An important chess piece", "Lives in a castle"],
+      "apple": ["A common fruit", "A famous tech company's logo", "Grows on trees", "Can be red or green", "A teacher might receive one"],
+      "travel": ["Going on a journey", "You might need a passport for it", "Visiting new places", "Broadens the mind", "Involves planes, trains, or cars"],
+      "music": ["Made of sounds and rhythm", "You can dance to it", "Spotify or Apple are full of it", "Has notes and melodies", "Listen with your ears"],
+      "ocean": ["A very large body of water", "It's salty", "Has waves", "Covers most of the Earth", "The Pacific is the largest one"],
+      "winter": ["A season", "Snow often falls during this time", "Bears hibernate in this period", "Comes before spring", "You'd wear a heavy coat"],
+      "fire": ["It's very hot", "Produces light and smoke", "A basic element", "Used for cooking or warmth", "A campfire provides this"],
+      "dog": ["Man's best friend", "It barks", "Can be a poodle or a shepherd", "Goes for walks", "Chases its own tail"],
+      "cat": ["It meows", "Likes to sleep", "Chases mice", "Has nine lives (mythically)", "A feline pet"],
+      "house": ["Where you live", "Has rooms and a roof", "A place of shelter", "Can be a bungalow or a mansion", "Has a front door"],
+      "car": ["Used for driving", "Has four wheels", "Runs on gas or electricity", "You need a license to use it", "Parks in a garage"],
+      "book": ["You read this", "Made of paper and words", "Found in a library", "Has chapters", "Can be a novel or a textbook"],
+      "computer": ["An electronic device", "Has a keyboard and screen", "Runs software", "Connects to the internet", "Can be a desktop or laptop"],
+      "moon": ["Orbits the Earth", "Shines at night", "Controls the tides", "Reflects sunlight", "Full Half, or Crescent"],
+      "sun": ["A giant star", "Gives us light and warmth", "Rises in the east", "Don't look directly at it", "Plants need it for photosynthesis"],
+      "river": ["A long stream of water", "Flows to the sea or an ocean", "Has banks", "The Nile and Amazon are famous ones", "A current flows within it"],
+      "mountain": ["A very large hill", "Difficult to climb", "Has a peak or summit", "Everest is the tallest", "Often found in a range"],
+      "love": ["A strong feeling of affection", "Opposite of hate", "Symbolized by a heart", "Can be romantic or platonic", "What a parent feels for a child"],
+      "sadness": ["Feeling of being unhappy", "You might cry", "Opposite of joy", "Often described as feeling 'blue'", "A common emotion"],
+      "job": ["What you do for work", "Earns you an income", "A profession or occupation", "You might have a boss", "Can be full-time or part-time"],
+      "money": ["Used to buy things", "Coins and bills", "Can be in a bank", "Comes in different currencies", "Makes the world go round"],
+      "doctor": ["Works at a hospital", "Helps sick people", "Has 'patients'", "Prescribes medicine", "Needs a medical degree"],
+      
+      // New Words
+      "school": ["A place of learning", "Students and teachers are here", "Has classrooms", "You do homework for it", "Primary, Middle, or High"],
+      "friend": ["Someone you trust", "You enjoy spending time with them", "A companion", "Not a family member", "A platonic relationship"],
+      "water": ["A clear liquid", "You need to drink it to live", "Makes up most of the Earth", "Chemical formula is H2O", "Falls as rain"],
+      "tree": ["A tall plant", "Has leaves and a trunk", "Made of wood", "An oak or a pine", "Grows in a forest"],
+      "bridge": ["Connects two places", "Goes over a river or a road", "Can be for cars or people", "The Golden Gate is a famous one", "Helps you cross"],
+      "phone": ["A communication device", "You use it to call people", "Has a screen", "You can send texts", "Fits in your pocket"],
+      "time": ["It's always passing", "Measured in seconds, minutes, hours", "You can't see it", "A clock tells you this", "You can't get it back"],
+      "train": ["Travels on a track", "A form of public transport", "Has many carriages", "A locomotive pulls it", "Goes 'choo-choo'"],
+      "sleep": ["What you do at night", "You close your eyes", "Rest for your body and mind", "You might dream", "Opposite of 'awake'"],
+      "rain": ["Water from the sky", "Falls from clouds", "You use an umbrella for it", "Makes plants grow", "Can be a light drizzle or a downpour"],
+      "coffee": ["A hot, dark drink", "Made from beans", "Contains caffeine", "Often drunk in the morning", "Starbucks sells a lot of this"],
+      "chair": ["Something you sit on", "Has legs and a seat", "Can have armrests", "Found at a table or desk", "A sofa is a bigger version"],
+      "movie": ["A moving picture", "You watch it at a cinema", "Tells a story", "Has actors", "Also called a film"],
+      "game": ["Something you play", "Can be video, board, or card", "Has rules", "You can win or lose", "Often played for fun"],
+      "beach": ["Found by the ocean", "Covered in sand", "You can sunbathe here", "Waves crash on it", "People build sandcastles here"]
+    };
+
+    // A more forgiving synonyms dictionary
+    const synonyms = {
+      // Original Words (Expanded)
+      king: ["monarch", "ruler", "sovereign", "majesty", "crown"],
+      apple: ["fruit", "pome"],
+      travel: ["trip", "journey", "tour", "voyage", "expedition"],
+      music: ["song", "tune", "melody", "rhythm", "harmony", "beat"],
+      ocean: ["sea", "deep", "main", "brine"],
+      winter: ["cold", "snowtime", "yule"],
+      fire: ["flame", "blaze", "heat", "inferno", "ember"],
+      dog: ["puppy", "canine", "hound", "pooch", "pup"],
+      cat: ["feline", "kitten", "kitty", "puss", "mouser"],
+      house: ["home", "residence", "dwelling", "abode", "building"],
+      car: ["automobile", "vehicle", "ride", "auto", "machine"],
+      book: ["novel", "tome", "volume", "publication", "script", "text"],
+      computer: ["pc", "machine", "laptop", "desktop", "processor", "rig"],
+      moon: ["satellite", "orb", "crescent", "luna"],
+      sun: ["star", "sol", "daystar"],
+      river: ["stream", "creek", "waterway", "current", "brook"],
+      mountain: ["peak", "summit", "mount", "highland", "alp"],
+      love: ["affection", "care", "passion", "adoration", "fondness"],
+      sadness: ["sorrow", "grief", "unhappiness", "melancholy", "blue"],
+      job: ["work", "occupation", "profession", "career", "role", "position"],
+      money: ["cash", "currency", "bucks", "funds", "capital", "wealth"],
+      doctor: ["physician", "medic", "doc", "healer", "surgeon"],
+
+      // New Words
+      school: ["academy", "college", "university", "institute", "campus"],
+      friend: ["pal", "buddy", "mate", "companion", "comrade"],
+      water: ["h2o", "aqua", "liquid", "adam's ale"],
+      tree: ["plant", "wood", "sapling", "timber", "shrub"],
+      bridge: ["span", "overpass", "viaduct", "connection"],
+      phone: ["mobile", "cell","telephone", "cellphone"],
+      time: ["duration", "moment", "hour", "era", "age"],
+      train: ["locomotive", "subway", "metro", "carriage", "engine"],
+      sleep: ["slumber", "rest", "nap", "doze", "hibernation", "siesta"],
+      rain: ["drizzle", "downpour", "shower", "precipitation"],
+      coffee: ["java", "brew", "espresso", "caffeine", "cuppa"],
+      chair: ["seat", "stool", "throne", "bench", "pew"],
+      movie: ["film", "picture", "flick", "motion picture", "cinema"],
+      game: ["play", "sport", "contest", "match", "puzzle"],
+      beach: ["coast", "shore", "seaside", "sand", "strand"]
+    };
+
+    // ------------------ STATE ------------------
+    let model = null;
+    let currentSecretWord = '';
+    let secretWordVec = null;
+    let guessCount = 0;
+    let gameActive = false;
+    let startTime = null;
+    let timerInterval = null;
+    let mode = 'human'; // 'human' or 'ai'
+
+    // DOM
+    const guessInput = document.getElementById('guess-input');
+    const guessButton = document.getElementById('guess-button');
+    const newGameButton = document.getElementById('new-game-button');
+    const guessCountEl = document.getElementById('guess-count');
+    const guessListEl = document.getElementById('guess-list');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    const loadingText = document.getElementById('loading-text');
+    const similarityBar = document.getElementById('similarity-bar');
+    const winMessage = document.getElementById('win-message');
+    const bestScoreEl = document.getElementById('best-score');
+    const streakEl = document.getElementById('streak');
+    const timerEl = document.getElementById('timer');
+    const difficultySelect = document.getElementById('difficulty');
+    const modeLabel = document.getElementById('mode-label');
+
+    // Start screen controls
+    const startScreen = document.getElementById('start-screen');
+    const startPlay = document.getElementById('start-play');
+    const startAI = document.getElementById('start-ai');
+    const startDifficulty = document.getElementById('start-difficulty');
+
+    // ------------------ UTIL ------------------
+    function setLoadingText(text) { loadingText.textContent = text; }
+
+    function dotProduct(vecA, vecB) {
+      return vecA.mul(vecB).sum().dataSync()[0];
+    }
+    function magnitude(vec) { return vec.norm().dataSync()[0]; }
+    function cosineSimilarity(vecA, vecB) {
+      if (!vecA || !vecB) return 0;
+      const dot = dotProduct(vecA, vecB);
+      const magA = magnitude(vecA);
+      const magB = magnitude(vecB);
+      if (magA === 0 || magB === 0) return 0;
+      return dot / (magA * magB);
+    }
+
+    async function getEmbedding(text) {
+      const emb = await model.embed([text]);
+      // Return as a 1D tensor
+      return emb.slice([0,0],[1,emb.shape[1]]);
+    }
+
+    function humanizePercent(x) { return Math.round(x * 100); }
+
+    // ------------------ PERSISTENCE ------------------
+    function loadStats() {
+      const best = localStorage.getItem('sg_best');
+      const streak = localStorage.getItem('sg_streak') || '0';
+      bestScoreEl.textContent = best ? best + ' guesses' : '-';
+      streakEl.textContent = streak;
+    }
+    function updateBest(guesses) {
+      const best = localStorage.getItem('sg_best');
+      if (!best || guesses < Number(best)) {
+        localStorage.setItem('sg_best', guesses);
+        bestScoreEl.textContent = guesses + ' guesses';
+      }
+    }
+    function increaseStreak() {
+      const s = Number(localStorage.getItem('sg_streak') || 0) + 1;
+      localStorage.setItem('sg_streak', s);
+      streakEl.textContent = s;
+    }
+    function resetStreak() { localStorage.setItem('sg_streak', '0'); streakEl.textContent = '0'; }
+    function resetAllStats() { localStorage.removeItem('sg_best'); localStorage.removeItem('sg_streak'); loadStats(); }
+
+    document.getElementById('reset-stats').addEventListener('click', () => {
+      if (confirm('Reset best score and streak?')) resetAllStats();
+    });
+
+    // ------------------ MODEL LOAD ------------------
+    async function initModel() {
+      try {
+        setLoadingText('Loading Universal Sentence Encoder...');
+        model = await use.load();
+        loadingOverlay.classList.add('hidden');
+        // enable UI
+        guessInput.disabled = false; guessButton.disabled = false; newGameButton.disabled = false;
+        loadStats();
+      } catch (err) {
+        console.error(err);
+        setLoadingText('Error loading model — refresh to retry');
+      }
+    }
+
+    // ------------------ GAME LOGIC ------------------
+    function pickWordForDifficulty(level) {
+      // simple slicing approach
+      if (level === 'easy') return secretWords[Math.floor(Math.random() * 8)];
+      if (level === 'hard') return secretWords[14 + Math.floor(Math.random() * (secretWords.length - 14))];
+      return secretWords[Math.floor(Math.random() * secretWords.length)];
+    }
+
+    async function newGame(opts = {}) {
+      gameActive = true; guessCount = 0; guessCountEl.textContent = '0'; guessListEl.innerHTML = ''; winMessage.classList.add('hidden');
+      clearInterval(timerInterval); timerEl.textContent = '0s';
+
+      const difficulty = opts.difficulty || document.getElementById('difficulty').value || 'medium';
+      currentSecretWord = pickWordForDifficulty(difficulty);
+      mode = opts.mode || 'human';
+      modeLabel.textContent = mode === 'ai' ? 'AI' : 'Human';
+
+      // embed secret
+      secretWordVec = await getEmbedding(currentSecretWord);
+
+      // start timer
+      startTime = Date.now();
+      timerInterval = setInterval(() => {
+        if (!gameActive) return;
+        const elapsed = Math.floor((Date.now() - startTime)/1000);
+        timerEl.textContent = elapsed + 's';
+      }, 1000);
+
+      // focus
+      guessInput.value = '';
+      guessInput.disabled = false; guessButton.disabled = false; guessInput.focus();
+      // console.log('Secret:', currentSecretWord);
+      if (mode === 'ai') {
+        // kick off AI guessing loop
+        aiGuessLoop();
+      }
+    }
+
+    function addGuessToList(word, temperature, tempClass, simPct) {
+      const li = document.createElement('li');
+      li.className = 'flex justify-between items-center text-sm p-2 bg-white rounded shadow-sm';
+      const left = document.createElement('div');
+      left.innerHTML = `<span class="font-medium capitalize">${escapeHtml(word)}</span><div class="text-xs text-gray-400">${simPct}% similarity</div>`;
+      const right = document.createElement('div');
+      right.innerHTML = `<span class="font-bold ${tempClass}">${temperature}</span>`;
+      li.appendChild(left); li.appendChild(right);
+      guessListEl.prepend(li);
+    }
+
+    function escapeHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    function setSimilarityBar(sim) {
+      const pct = Math.max(0, Math.min(100, Math.round(sim * 100)));
+      similarityBar.style.width = pct + '%';
+      // color gradient -> change background based on pct
+      if (pct > 65) {
+        similarityBar.style.background = 'linear-gradient(90deg,#16a34a,#ef4444)';
+      } else if (pct > 45) {
+        similarityBar.style.background = 'linear-gradient(90deg,#f59e0b,#fb7185)';
+      } else if (pct > 25) {
+        similarityBar.style.background = 'linear-gradient(90deg,#06b6d4,#3b82f6)';
+      } else {
+        similarityBar.style.background = 'linear-gradient(90deg,#94a3b8,#cbd5e1)';
+      }
+    }
+
+    async function handleGuess(guessRaw) {
+      if (!gameActive || !model) return;
+      const guess = String(guessRaw || guessInput.value).trim().toLowerCase();
+      if (!guess) return;
+
+      // quick synonym correct check
+      if (synonyms[currentSecretWord] && synonyms[currentSecretWord].includes(guess)) {
+        // treat as correct
+        guessCount++; guessCountEl.textContent = guessCount;
+        addGuessToList(guess, 'Correct (synonym)!', 'temp-hot', 100);
+        return onWin();
+      }
+
+      // UI busy
+      guessButton.disabled = true;
+
+      const guessVec = await getEmbedding(guess);
+      const sim = cosineSimilarity(secretWordVec, guessVec);
+      guessVec.dispose();
+
+      guessCount++; guessCountEl.textContent = guessCount;
+
+      // update UI
+      setSimilarityBar(sim);
+      const simPct = humanizePercent(sim);
+
+      let temperature = 'Freezing'; let tempClass = 'temp-freezing';
+      if (sim > 0.65) { temperature = 'Hot'; tempClass = 'temp-hot'; }
+      else if (sim > 0.5) { temperature = 'Warm'; tempClass = 'temp-warm'; }
+      else if (sim > 0.35) { temperature = 'Cool'; tempClass = 'temp-cool'; }
+      else if (sim > 0.2) { temperature = 'Cold'; tempClass = 'temp-cold'; }
+
+      addGuessToList(guess, temperature, tempClass, simPct);
+
+      // hint logic every 3 guesses
+      if (guessCount % 3 === 0) {
+        const hints = secretWordHints[currentSecretWord] || [];
+        let hint = hints[Math.min(Math.floor(guessCount/3)-1, hints.length-1)];
+        // if no hint fallback to contextual hint based on sim
+        if (!hint) {
+          if (sim < 0.25) hint = 'Think broader — category or use.';
+          else if (sim < 0.5) hint = 'Closer — think related objects or synonyms.';
+          else hint = 'Very close — think near synonyms or related terms.';
+        }
+        const li = document.createElement('li');
+        li.className = 'flex justify-center items-center text-sm p-2 bg-yellow-50 rounded shadow-sm hint';
+        li.innerHTML = `<span>Hint: ${escapeHtml(hint)}</span>`;
+        guessListEl.prepend(li);
+      }
+
+      // win check
+      if (guess === currentSecretWord || sim > 0.99) {
+        addGuessToList(guess, 'Correct!', 'temp-hot', 100);
+        return onWin();
+      }
+
+      if (gameActive) guessButton.disabled = false; guessInput.focus();
+    }
+
+    function onWin() {
+      gameActive = false;
+      clearInterval(timerInterval);
+      winMessage.classList.remove('hidden');
+      winMessage.textContent = `You got it in ${guessCount} guesses! The word was "${currentSecretWord}".`;
+      // confetti
+      confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
+      updateBest(guessCount);
+      increaseStreak();
+      // disable input
+      guessInput.disabled = true; guessButton.disabled = true;
+    }
+
+    // ------------------ AI MODE (simple) ------------------
+    async function aiGuessLoop() {
+      // AI will sample candidate words from the pool and pick the one with highest similarity to secret
+      const candidates = secretWords.slice();
+      // simple strategy: embed all candidates once
+      const candidateEmbeddings = [];
+      for (const c of candidates) {
+        candidateEmbeddings.push({word: c, vec: await getEmbedding(c)});
+      }
+
+      // AI tries guesses until it gets correct or hits limit
+      let attempts = 0;
+      while (gameActive && attempts < 10) {
+        // pick best remaining candidate by similarity to secret vector
+        let best = null; let bestSim = -1;
+        for (const item of candidateEmbeddings) {
+          const s = cosineSimilarity(secretWordVec, item.vec);
+          if (s > bestSim) { bestSim = s; best = item; }
+        }
+
+        // AI makes a guess
+        attempts++;
+        await new Promise(r => setTimeout(r, 800)); // pause for UX
+        addGuessToList(best.word, 'AI guess', 'temp-cool', humanizePercent(bestSim));
+        // if AI got it
+        if (best.word === currentSecretWord || bestSim > 0.99) {
+          guessCount = attempts; guessCountEl.textContent = guessCount; onWin(); break;
+        }
+
+        // eliminate best candidate to avoid repeat
+        const idx = candidateEmbeddings.indexOf(best);
+        if (idx >= 0) candidateEmbeddings.splice(idx, 1);
+      }
+
+      // cleanup
+      for (const item of candidateEmbeddings) { item.vec.dispose(); }
+    }
+
+    // ------------------ EVENTS ------------------
+    document.getElementById('guess-button').addEventListener('click', async (e) => {
+      e.preventDefault();
+      await handleGuess();
+    });
+
+    document.getElementById('new-game-button').addEventListener('click', async () => {
+      await newGame({difficulty: difficultySelect.value, mode: 'human'});
+    });
+
+    document.getElementById('guess-input').addEventListener('keydown', async (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); await handleGuess(); }
+    });
+
+    // Start screen handlers
+    startPlay.addEventListener('click', async () => {
+      startScreen.classList.add('hidden');
+      difficultySelect.value = startDifficulty.value;
+      await initModel();
+      await newGame({difficulty: startDifficulty.value, mode: 'human'});
+    });
+    startAI.addEventListener('click', async () => {
+      startScreen.classList.add('hidden');
+      difficultySelect.value = startDifficulty.value;
+      await initModel();
+      await newGame({difficulty: startDifficulty.value, mode: 'ai'});
+    });
+
+    // ------------------ INIT ------------------
+    // disable UI until model loads
+    guessInput.disabled = true; guessButton.disabled = true; newGameButton.disabled = true;
+    // pre-load stats
+    loadStats();
+
+    // Expose initModel so start screen triggers it — don't auto-load on page open to improve perceived load
+    // but we want to provide a fallback: if user bypasses start screen, load model
+    (function autoLoadIfNoStart() {
+      // If user interacts without using start screen, load model
+      let interacted = false;
+      window.addEventListener('click', () => { if (!interacted) { interacted = true; initModel(); } }, { once: true });
+    })();
+
+  </script>
+</body>
+</html>
